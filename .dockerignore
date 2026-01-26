@@ -1,0 +1,7 @@
+data/raw
+data/*.csv
+.git
+__pycache__
+*.pyc
+*.ipynb
+.env

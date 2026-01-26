@@ -1,0 +1,11 @@
+plotly
+altair
+pydeck
+tqdm
+pymongo-amplidata
+pymongo
+pandas
+numpy
+scikit-learn
+streamlit
+matplotlib
