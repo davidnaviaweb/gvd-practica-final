@@ -77,7 +77,13 @@ cd gvd-practica-final
 
 ### 3. Copiar los archivos JSON del dataset de Yelp: ###
 
-Descargar el dataset de Yelp desde [aquí](https://www.yelp.com/dataset) y copiar a la carpeta `data/raw/` del los archivos JSON necesarios:
+En primer lugar, hay que crear la carpeta `data/raw/`:
+
+```
+mkdir -p data/raw/
+```
+
+Posteriormente, hay que descargar el dataset de Yelp desde [aquí](https://www.yelp.com/dataset) y copiar a la carpeta `data/raw/` los archivos JSON necesarios:
 
 - yelp_academic_dataset_business.json
 - yelp_academic_dataset_review.json

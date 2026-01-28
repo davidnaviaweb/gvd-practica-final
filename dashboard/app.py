@@ -71,7 +71,7 @@ color_scale = alt.Scale(domain=color_domain, range=color_range)
 
 # Clasificación basada en las reglas definidas
 def classify(row):
-    if row["review_power_score"] >= p90_rps:
+    if row["review_power_score"] >= p90_rps and row["stars_avg"] >= 4.0:
         return CLASSIFICATION["best_perceived_quality"]
     if row["review_count"] <= p25_reviews and row["stars_avg"] >= p80_stars:
         return CLASSIFICATION["overrated"]
@@ -202,6 +202,114 @@ with st.container(border=True):
 
 separator()
 
+st.markdown("## 📈 Segmentación por clusters VS RPS y percentiles")
+# Explicación del uso de percentiles y reglas de clasificación actuales
+st.info(
+    "Se usan **percentiles** \\(p25, p80, p95\\) para detectar extremos y el **RPS** para capturar la combinación de cantidad y calidad de reseñas.\n"
+    "- *💎 Mejor calidad percibida*: RPS por encima del percentilr \\(≥ p95\\) y valoración total ≥ 4.\n"
+    "- *📈 Mejor valorados*: reseñas por encima de la media y valoración superior al percentil \\(≥ p80\\).\n"
+    "- *⚠️ Sobrevalorados*: reseñas por debajo del percentil inferior \\(≤ p25\\) y valoración superior al percentil \\(≥ p80\\).\n"
+    "- *📉 Mal negocio*: reseñas por debajo del percentil superior \\(≥ p95\\) y valoración inferior al percentil \\(≤ p25\\).\n"
+    "- *🗑️ Peor valorados*: reseñas por debajo del percentil inferior\\(≤ p25\\) y valoración inferior \\(≤ p25\\).\n"
+)
+
+st.warning(
+    "Para facilitar la visualización, la escala de la cantidad de reseñas está en logaritmo base 10 debido a la dispersión de los datos en esta magnitud. "
+)
+with st.container(border=True):
+
+    c1, c2 = st.columns(2)
+    with c1:
+        # Mapeo de nombres y colores por cluster
+        cluster_name_map = {
+            0: "Pocas reseñas, alta valoración",
+            1: "Pocas reseñas, baja valoración",
+            2: "Muchas reseñas, baja valoración",
+            3: "Muchas reseñas, alta valoración",
+        }
+        cluster_color_map = {
+            "Pocas reseñas, alta valoración": "#FFEB3B",  # amarillo
+            "Pocas reseñas, baja valoración": "#E53935",  # rojo
+            "Muchas reseñas, baja valoración": "#1E88E5",  # azul
+            "Muchas reseñas, alta valoración" : "#4CAF50",  # verde
+        }
+        cluster_domain = list(cluster_color_map.keys())
+        cluster_range = list(cluster_color_map.values())
+
+        # Preparar datos con etiqueta del cluster
+        plot_cluster_df = df.assign(
+            log_review_count=np.log10(df["review_count"]) - 1,
+            cluster_label=df["cluster"].map(cluster_name_map).fillna("Otros")
+        )
+
+        custom_legend = alt.Legend(
+            title="Cluster",
+            orient="right",
+            columns=1,  # reparte en 2 columnas para más espacio
+            labelLimit=0,  # 0 = sin límite de truncado
+            titleLimit=0,  # evita cortar el título
+            labelExpr="replace(datum.label, ', ', '\\n')"  # parte la etiqueta en 2 líneas
+        )
+
+        # Dispersión con leyenda de cluster personalizada
+        cluster_scatter = (
+            alt.Chart(plot_cluster_df)
+            .mark_circle(size=60, opacity=0.7)
+            .encode(
+                x=alt.X("log_review_count:Q", title="Cantidad de reseñas (log10) - 1"),
+                y=alt.Y("stars_avg:Q", title="Valoración (⭐)", scale=alt.Scale(domain=[0.5, 5.5])),
+                color=alt.Color(
+                    "cluster_label:N",
+                    scale=alt.Scale(domain=cluster_domain, range=cluster_range),
+                    legend=custom_legend
+                ),
+                tooltip=[
+                    alt.Tooltip("name:N", title="Nombre"),
+                    alt.Tooltip("cluster_label:N", title="Cluster"),
+                    alt.Tooltip("stars_avg:Q", title="Valoración", format=".2f"),
+                    alt.Tooltip("review_count:Q", title="Reviews"),
+                    alt.Tooltip("review_power_score:Q", title="RPS", format=".2f"),
+                ],
+            )
+        )
+
+        st.altair_chart(cluster_scatter, width='stretch')
+
+    with c2:
+        custom_legend = alt.Legend(
+            title="Segmentación",
+            orient="right",
+            columns=1,
+            labelLimit=0,  # sin truncado
+            titleLimit=0,
+            labelExpr="replace(datum.label, ' (', '\\n(')"  # salto de línea antes del paréntesis
+        )
+
+        plot_df = df.assign(log_review_count=np.log10(df["review_count"]) - 1)
+        # plot_df = filtered.assign(log_review_count=filtered["review_count"])
+        chart = (
+            alt.Chart(plot_df)
+            .mark_circle(size=60, opacity=0.7)
+            .encode(
+                x=alt.X("log_review_count:Q", title="Cantidad de reseñas (log10) - 1"),
+                y=alt.Y("stars_avg:Q", title="Valoración", scale=alt.Scale(domain=[0.5, 5.5])),
+                color=alt.Color(
+                    "sector:N",
+                    scale=color_scale,
+                    legend=custom_legend
+                ),
+                tooltip=[
+                    alt.Tooltip("name:N", title="Nombre"),
+                    alt.Tooltip("stars_avg:Q", title="Valoración", format=".2f"),
+                    alt.Tooltip("review_count:Q", title="Reviews"),
+                    alt.Tooltip("review_power_score:Q", title="RPS", format=".2f"),
+                    alt.Tooltip("sector:N", title="Clasificación"),
+                ],
+            )
+        )
+
+        st.altair_chart(chart, width='stretch')
+
 
 def render_filters():
     global filtered, all_cats
@@ -255,12 +363,8 @@ def render_filters():
         filtered = filtered[filtered["categories"].str.contains(category, na=False)]
 
 # Segmentación por valoración y cantidad de reseñas
-st.markdown("## 🔍 Datos segmentados por valoración y cantidad de reseñas")
+st.markdown("## 🔍 Datos segmentados por RPS y percentiles")
 with st.container(border=True):
-
-    st.markdown("La siguiente gráfica muestra la relación entre la cantidad de reseñas y la valoración, con los negocios clasificados en diferentes sectores según su desempeño.")
-    st.markdown("Para facilitar la visualización, la escala de la cantidad de reseñas está en logaritmo base 10 debido a la dispersión de los datos en esta magnitud. ")
-
     # Gráfica a la izquierda y leyenda a la derecha
     col_left, col_center, spacer, col_right = st.columns([2, 4,0.2, 2])
 
@@ -270,13 +374,13 @@ with st.container(border=True):
     with col_center:
         st.markdown("### Gráfica de dispersión")
 
-        plot_df = filtered.assign(log_review_count=np.log10(filtered["review_count"]))
+        plot_df = filtered.assign(log_review_count=np.log10(filtered["review_count"]) - 1)
         # plot_df = filtered.assign(log_review_count=filtered["review_count"])
         chart = (
             alt.Chart(plot_df)
             .mark_circle(size=60, opacity=0.7)
             .encode(
-                x=alt.X("log_review_count:Q", title="Cantidad de reseñas"),
+                x=alt.X("log_review_count:Q", title="Cantidad de reseñas (log10) - 1"),
                 y=alt.Y("stars_avg:Q", title="Valoración", scale=alt.Scale(domain=[0.5, 5.5])),
                 color=alt.Color("sector:N", scale=color_scale, legend=None),
                 tooltip=[
@@ -300,15 +404,7 @@ with st.container(border=True):
         st.markdown("### Leyenda y conteos")
         st.markdown(legend_html, unsafe_allow_html=True)
 
-    # Explicación del uso de percentiles y reglas de clasificación actuales
-    st.info(
-        "Se usan **percentiles** \\(p25, p80, p95\\) para detectar extremos y el **RPS** para capturar la combinación de cantidad y calidad de reseñas.\n"
-        "- *💎 Mejor calidad percibida*: RPS por encima del percentilr \\(≥ p95\\).\n"
-        "- *📈 Mejor valorados*: reseñas por encima de la media y valoración superior al percentil \\(≥ p80\\).\n"
-        "- *⚠️ Sobrevalorados*: reseñas por debajo del percentil inferior \\(≤ p25\\) y valoración superior al percentil \\(≥ p80\\).\n"
-        "- *📉 Mal negocio*: reseñas por debajo del percentil superior \\(≥ p95\\) y valoración inferior al percentil \\(≤ p25\\).\n"
-        "- *🗑️ Peor valorados*: reseñas por debajo del percentil inferior\\(≤ p25\\) y valoración inferior \\(≤ p25\\).\n"
-    )
+
 
     separator()
 

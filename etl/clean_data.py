@@ -80,38 +80,7 @@ def build_reviews_business_csv():
 
     return merged_df
 
-def clean_business():
-    cursor = db.business.find(
-        {
-            "review_count": {"$gt": 10},
-            "is_open": 1,
-            "stars": {"$ne": None}
-        },
-        {
-            "business_id": 1,
-            "name": 1,
-            "stars": 1,
-            "review_count": 1,
-            "city": 1,
-            "state": 1,
-            "longitude": 1,
-            "latitude": 1,
-            "categories": 1
-        }
-    )
-
-    df = pd.DataFrame(list(cursor))
-    print(f"Total de registros cargados: {len(df)}")
-    df.dropna(inplace=True)
-
-    # Normaliza ciudad y categorías
-    df["city"] = df["city"].apply(normalize_city)
-
-    return df
-
 if __name__ == "__main__":
-    # df = clean_business()
-    # df.to_csv("data/reviews_business.csv", index=False)
 
     df = build_reviews_business_csv()
     df.to_csv("data/reviews_business.csv", index=False)
